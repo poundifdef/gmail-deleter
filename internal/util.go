@@ -93,7 +93,6 @@ func waitForWindow(cost int, db database.Db) {
 			break
 		}
 
-		log.Println("Backing off", canProcess)
 		time.Sleep(1 * time.Second)
 	}
 }
