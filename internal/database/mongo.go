@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"time"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -13,6 +14,16 @@ import (
 
 type Db struct {
 	MongoClient *mongo.Client
+}
+
+func IndexExists(err error) bool {
+    var e mongo.CommandError
+    if errors.As(err, &e) {
+		if e.Code == 68 {
+			return true
+		}
+    }
+    return false
 }
 
 func IsDup(err error) bool {
@@ -25,6 +36,63 @@ func IsDup(err error) bool {
         }
     }
     return false
+}
+
+func (db Db) ReserveWindow(cost int) bool {
+	MAX_PER_DAY := 1_000_000_000
+	MAX_USER_PER_SECOND := 150  // Gmail has a max of 250 for this
+
+	now := time.Now()
+	today := now.Truncate(24*time.Hour)
+	this_second := now.Truncate(1*time.Second)
+
+	database := db.MongoClient.Database("gmail_deleter")
+	windowsCollection := database.Collection("windows")
+
+	upsert := true
+	after := options.After
+	opt := options.FindOneAndUpdateOptions{
+		ReturnDocument: &after,
+		Upsert:         &upsert,
+	}
+
+	result := windowsCollection.FindOneAndUpdate(
+		context.Background(),
+		bson.M{
+			"window_name": "GOOGLE",
+			"ts": today,
+			"count": bson.M{"$lt": MAX_PER_DAY},
+		},
+		bson.D{
+			{"$inc", bson.M{
+				"count": cost,
+			}},
+		},
+		&opt,
+	)
+	if (result.Err() != nil) {
+		return false
+	}
+
+	result = windowsCollection.FindOneAndUpdate(
+		context.Background(),
+		bson.M{
+			"window_name": "USER",
+			"ts": this_second,
+			"count": bson.M{"$lt": MAX_USER_PER_SECOND},
+		},
+		bson.D{
+			{"$inc", bson.M{
+				"count": cost,
+			}},
+		},
+		&opt,
+	)
+	if (result.Err() != nil) {
+		return false
+	}
+
+	return true
 }
 
 func (db Db) Summarize() []models.Report {
@@ -42,7 +110,6 @@ func (db Db) Summarize() []models.Report {
 			},
 		},
 	}
-
 	sort := bson.D{
 		{
 			"$sort", bson.D{
@@ -52,9 +119,7 @@ func (db Db) Summarize() []models.Report {
 		},
 	}
 	limit := bson.D{{"$limit", summaryLimit}}
-
 	report := make([]models.Report, summaryLimit)
-	//report := []models.Report
 
 	summaryCursor, err := threadsCollection.Aggregate(
 		context.TODO(),

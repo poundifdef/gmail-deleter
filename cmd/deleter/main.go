@@ -85,7 +85,6 @@ func main() {
 
 	flag.Parse()
 
-
 	ctx := context.TODO()
 	mongoClient, err := mongo.Connect(
 		ctx,
@@ -98,6 +97,9 @@ func main() {
 
 	db := database.Db{}
 	db.MongoClient = mongoClient
+	d := mongoClient.Database("gmail_deleter")
+	threadsCollection := d.Collection("threads")
+	windowsCollection := d.Collection("windows")
 
 	mod := mongo.IndexModel{
 		Keys: bson.M{
@@ -105,11 +107,23 @@ func main() {
 		},
 		Options: options.Index().SetUnique(true),
 	}
-	database := mongoClient.Database("gmail_deleter")
-	threadsCollection := database.Collection("threads")
 	_, err = threadsCollection.Indexes().CreateOne(ctx, mod)
 	if (err != nil) {
 		log.Fatalf("Unable to create index: %v", err)
+	}
+
+	mod = mongo.IndexModel{
+		Keys: bson.M{
+			"window_name": 1,
+			"ts": 1,
+		},
+		Options: options.Index().SetUnique(true),
+	}
+	_, err = windowsCollection.Indexes().CreateOne(ctx, mod)
+	if (err != nil) {
+		if database.IndexExists(err) == false {
+			log.Fatalf("Unable to create index: %v", err)
+		}
 	}
 
 	b, err := ioutil.ReadFile(*gmailClientSecret)

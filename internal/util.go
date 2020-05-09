@@ -85,9 +85,24 @@ func parseEmail(e string) string {
 	return e
 }
 
+func waitForWindow(cost int, db database.Db) {
+	for {
+		canProcess := db.ReserveWindow(cost)
+
+		if canProcess {
+			break
+		}
+
+		log.Println("Backing off", canProcess)
+		time.Sleep(1 * time.Second)
+	}
+}
+
 func FetchEmailWorker(tid int, wg *sync.WaitGroup, gmail *gmail.Service, db database.Db) {
 	defer wg.Done()
 	for {
+		waitForWindow(10, db)
+
 		thread := db.FindOne(bson.M{"status": "NEW"}, "FETCHING_THREAD")
 		if (thread.Id == "") {
 			log.Println(tid, "Finished deleting")
@@ -135,6 +150,8 @@ func ListThreads(gmail *gmail.Service, db database.Db) {
 	nextPageToken := ""
 
 	for hasPage := true; hasPage; {
+		waitForWindow(10, db)
+
 		r, err := gmail.Users.Threads.
 			List(user).
 			MaxResults(500).
@@ -156,9 +173,6 @@ func ListThreads(gmail *gmail.Service, db database.Db) {
 		if (nextPageToken == "") {
 			hasPage = false
 		}
-
-		// xxx
-		hasPage = false
 	} 
 
 	wg.Wait()
