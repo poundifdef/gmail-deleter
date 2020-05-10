@@ -80,7 +80,7 @@ func main() {
 	mongoConnectionString := flag.String("mongo", "mongodb://localhost:27017", "MongoDB connection string")
 	analyze := flag.Bool("download", false, "Download metadata from gmail and catalog inbox")
 	report := flag.Bool("report", false, "Show summary of emails")
-	consumers := flag.Int("workers", 1, "Number of simultaneous email processor workers")
+	consumers := flag.Int("workers", 4, "Number of simultaneous email processor workers")
 	toDelete := flag.String("delete-from", "", "Delete all emails from this address")
 
 	flag.Parse()
