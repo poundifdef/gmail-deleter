@@ -6,8 +6,14 @@ This is a program which:
   - Respects the GMail API rate limits
 
 TODO:
+  - Clean up old windows. If we've passed a sliding window that is very old, then 
+    remove from db.
+  - Reset threads which are stuck in "fetching" or "deleting" state
   - Does not currently check for rate limit response codes from API. Should
     check for HTTP 403 or 429. https://developers.google.com/gmail/api/v1/reference/quota
+  - Save position of "next page" when downloading emails, in case this is interrupted
+  - Option to fetch individual threads, rather than starting the process of listing 
+    all threads from scratch
     
 Dependencies:
   - MongoDB

@@ -46,9 +46,11 @@ func createThread(wg *sync.WaitGroup, t *gmail.Thread, db database.Db) {
 func DeleteEmailWorker(tid int, wg *sync.WaitGroup, gmail *gmail.Service, db database.Db, from string) {
 	defer wg.Done()
 	for {
+		waitForWindow(10, db)
+
 		thread := db.FindOne(bson.M{"status": "FETCHED", "from": from}, "DELETING")
 		if (thread.Id == "") {
-			log.Println(tid, "No threads to fetch")
+			// log.Println(tid, "No threads to delete")
 			return
 		}
 
@@ -104,7 +106,7 @@ func FetchEmailWorker(tid int, wg *sync.WaitGroup, gmail *gmail.Service, db data
 
 		thread := db.FindOne(bson.M{"status": "NEW"}, "FETCHING_THREAD")
 		if (thread.Id == "") {
-			log.Println(tid, "Finished deleting")
+			// log.Println(tid, "Finished fetching")
 			return
 		}
 
