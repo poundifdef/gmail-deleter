@@ -16,10 +16,11 @@ type Db struct {
 	MongoClient *mongo.Client
 }
 
+// error codes: https://github.com/mongodb/mongo/blob/master/src/mongo/base/error_codes.yml#L110
 func IndexExists(err error) bool {
     var e mongo.CommandError
     if errors.As(err, &e) {
-		if e.Code == 68 {
+		if e.Code == 86 {
 			return true
 		}
     }
