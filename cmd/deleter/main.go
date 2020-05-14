@@ -4,9 +4,6 @@ import (
 	"log"
 	"flag"
 	"context"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo/options"
 	"os"
 	"encoding/json"
 	"io/ioutil"
@@ -77,7 +74,7 @@ func saveToken(path string, token *oauth2.Token) {
 
 func main() {
 	gmailClientSecret := flag.String("client-secret", "client_secret.json", "Google API client secret JSON file, downloaded from \n https://console.developers.google.com/apis/api/gmail.googleapis.com/credentials")
-	mongoConnectionString := flag.String("mongo", "mongodb://localhost:27017", "MongoDB connection string")
+	//mongoConnectionString := flag.String("mongo", "", "MongoDB connection string")
 	analyze := flag.Bool("download", false, "Download metadata from gmail and catalog inbox")
 	report := flag.Bool("report", false, "Show summary of emails")
 	consumers := flag.Int("workers", 4, "Number of simultaneous email processor workers")
@@ -85,46 +82,13 @@ func main() {
 
 	flag.Parse()
 
-	ctx := context.TODO()
-	mongoClient, err := mongo.Connect(
-		ctx,
-		options.Client().ApplyURI(*mongoConnectionString),
-	)
-	if (err != nil) {
-		log.Fatal(err)
-	}
-	defer mongoClient.Disconnect(ctx)
-
-	db := database.Db{}
-	db.MongoClient = mongoClient
-	d := mongoClient.Database("gmail_deleter")
-	threadsCollection := d.Collection("threads")
-	windowsCollection := d.Collection("windows")
-
-	mod := mongo.IndexModel{
-		Keys: bson.M{
-			"id": 1,
-		},
-		Options: options.Index().SetUnique(true),
-	}
-	_, err = threadsCollection.Indexes().CreateOne(ctx, mod)
-	if (err != nil) {
-		log.Fatalf("Unable to create index: %v", err)
+	//var db database.Database = &database.MongoDB{ConnectionString: *mongoConnectionString}
+	var db database.Database = &database.BoltDB{
+		Filename: "emails.db",
 	}
 
-	mod = mongo.IndexModel{
-		Keys: bson.M{
-			"window_name": 1,
-			"ts": 1,
-		},
-		Options: options.Index().SetUnique(true),
-	}
-	_, err = windowsCollection.Indexes().CreateOne(ctx, mod)
-	if (err != nil) {
-		if database.IndexExists(err) == false {
-			log.Fatalf("Unable to create index: %v", err)
-		}
-	}
+	db.Init()
+	defer db.Close()
 
 	b, err := ioutil.ReadFile(*gmailClientSecret)
 	if err != nil {
@@ -159,6 +123,9 @@ func main() {
 		for tid := 0; tid < *consumers; tid++ {
 			go internal.DeleteEmailWorker(tid, &wg, srv, db, *toDelete)
 		}
+	} else {
+		flag.PrintDefaults()
+		return
 	}
 
 	wg.Wait()

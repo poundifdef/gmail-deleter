@@ -12,8 +12,56 @@ import (
 	"gmail-deleter/internal/models"
 )
 
-type Db struct {
+type MongoDB struct {
+	ConnectionString string
 	MongoClient *mongo.Client
+}
+
+func (db *MongoDB) Init() {
+	mongoClient, err := mongo.Connect(
+		context.TODO(),
+		options.Client().ApplyURI(db.ConnectionString),
+	)
+	if (err != nil) {
+		log.Fatal(err)
+	}
+	db.MongoClient = mongoClient
+
+
+	d := db.MongoClient.Database("gmail_deleter")
+	threadsCollection := d.Collection("threads")
+	windowsCollection := d.Collection("windows")
+
+	//ctx := context.TODO()
+	mod := mongo.IndexModel{
+		Keys: bson.M{
+			"id": 1,
+		},
+		Options: options.Index().SetUnique(true),
+	}
+	_, err = threadsCollection.Indexes().CreateOne(context.TODO(), mod)
+	if (err != nil) {
+		log.Fatalf("Unable to create index: %v", err)
+	}
+
+	mod = mongo.IndexModel{
+		Keys: bson.M{
+			"window_name": 1,
+			"ts": 1,
+		},
+		Options: options.Index().SetUnique(true),
+	}
+	_, err = windowsCollection.Indexes().CreateOne(context.TODO(), mod)
+	if (err != nil) {
+		if IndexExists(err) == false {
+			log.Fatalf("Unable to create index: %v", err)
+		}
+	}
+
+}
+
+func (db *MongoDB) Close() {
+	db.MongoClient.Disconnect(context.TODO())
 }
 
 // error codes: https://github.com/mongodb/mongo/blob/master/src/mongo/base/error_codes.yml#L110
@@ -39,7 +87,7 @@ func IsDup(err error) bool {
     return false
 }
 
-func (db Db) ReserveWindow(cost int) bool {
+func (db MongoDB) ReserveWindow(cost int) bool {
 	MAX_PER_DAY := 1_000_000_000
 	MAX_USER_PER_SECOND := 150  // Gmail has a max of 250 for this
 
@@ -96,7 +144,7 @@ func (db Db) ReserveWindow(cost int) bool {
 	return true
 }
 
-func (db Db) Summarize() []models.Report {
+func (db MongoDB) Summarize() []models.Report {
 	summaryLimit := 100
 
 	database := db.MongoClient.Database("gmail_deleter")
@@ -137,14 +185,16 @@ func (db Db) Summarize() []models.Report {
 	return report
 }
 
-func (db Db) Create(thread models.Thread) (error) {
+func (db MongoDB) Create(thread models.Thread) (error) {
 	database := db.MongoClient.Database("gmail_deleter")
 	threadsCollection := database.Collection("threads")
 	_, err := threadsCollection.InsertOne(context.TODO(), thread)
+
+	log.Println(thread, err)
 	return err
 }
 
-func (db Db) Populate(thread models.Thread) (error) {
+func (db MongoDB) Populate(thread models.Thread) (error) {
 	database := db.MongoClient.Database("gmail_deleter")
 	threadsCollection := database.Collection("threads")
 	upsert := false
@@ -179,7 +229,7 @@ func (db Db) Populate(thread models.Thread) (error) {
 }
 
 
-func (db Db) DeleteOne(tid string) {
+func (db MongoDB) DeleteOne(tid string) {
 	database := db.MongoClient.Database("gmail_deleter")
 	threadsCollection := database.Collection("threads")
 	_, err := threadsCollection.DeleteOne(
@@ -191,7 +241,7 @@ func (db Db) DeleteOne(tid string) {
 	}
 }
 
-func (db Db) FindOne(criteria bson.M, newStatus string) (thread models.Thread) {
+func (db MongoDB) FindOne(criteria bson.M, newStatus string) (thread models.Thread) {
 	database := db.MongoClient.Database("gmail_deleter")
 	threadsCollection := database.Collection("threads")
 

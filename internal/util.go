@@ -14,7 +14,7 @@ import (
 	"gmail-deleter/internal/models"
 )
 
-func Summarize(db database.Db) {
+func Summarize(db database.Database) {
 	fmt.Println("From,Count")
 
 	report := db.Summarize()
@@ -26,7 +26,7 @@ func Summarize(db database.Db) {
 	}
 }
 
-func createThread(wg *sync.WaitGroup, t *gmail.Thread, db database.Db) {
+func createThread(wg *sync.WaitGroup, t *gmail.Thread, db database.Database) {
 	defer wg.Done()
 
 	var thread models.Thread
@@ -43,7 +43,7 @@ func createThread(wg *sync.WaitGroup, t *gmail.Thread, db database.Db) {
 	}
 }
 
-func DeleteEmailWorker(tid int, wg *sync.WaitGroup, gmail *gmail.Service, db database.Db, from string) {
+func DeleteEmailWorker(tid int, wg *sync.WaitGroup, gmail *gmail.Service, db database.Database, from string) {
 	defer wg.Done()
 	for {
 		waitForWindow(10, db)
@@ -87,19 +87,19 @@ func parseEmail(e string) string {
 	return e
 }
 
-func waitForWindow(cost int, db database.Db) {
+func waitForWindow(cost int, db database.Database) {
 	for {
 		canProcess := db.ReserveWindow(cost)
 
 		if canProcess {
 			break
 		}
-
+		//log.Println("waiting...")
 		time.Sleep(1 * time.Second)
 	}
 }
 
-func FetchEmailWorker(tid int, wg *sync.WaitGroup, gmail *gmail.Service, db database.Db) {
+func FetchEmailWorker(tid int, wg *sync.WaitGroup, gmail *gmail.Service, db database.Database) {
 	defer wg.Done()
 	for {
 		waitForWindow(10, db)
@@ -144,7 +144,7 @@ func FetchEmailWorker(tid int, wg *sync.WaitGroup, gmail *gmail.Service, db data
 
 }
 
-func ListThreads(gmail *gmail.Service, db database.Db) {
+func ListThreads(gmail *gmail.Service, db database.Database) {
 	var wg sync.WaitGroup
 
 	user := "me"
@@ -153,6 +153,9 @@ func ListThreads(gmail *gmail.Service, db database.Db) {
 	for hasPage := true; hasPage; {
 		waitForWindow(10, db)
 
+		// https://support.google.com/mail/answer/7190
+		// https://developers.google.com/gmail/api/guides/filtering
+		// -is:chat 
 		r, err := gmail.Users.Threads.
 			List(user).
 			MaxResults(500).
