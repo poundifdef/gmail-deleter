@@ -16,7 +16,6 @@ TODO:
     all threads from scratch
     
 Dependencies:
-  - MongoDB
   - Personal Gmail API key: https://console.developers.google.com/apis/api/gmail.googleapis.com/credentials 
 
 To run:
